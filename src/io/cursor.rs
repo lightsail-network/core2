@@ -259,10 +259,73 @@ fn slice_write(pos_mut: &mut u64, slice: &mut [u8], buf: &[u8]) -> Result<usize>
     Ok(amt)
 }
 
+#[cfg(feature = "alloc")]
+fn vec_write(pos_mut: &mut u64, vec: &mut alloc::vec::Vec<u8>, buf: &[u8]) -> Result<usize> {
+    let pos = *pos_mut as usize;
+    let len = vec.len();
+
+    // If the current position is beyond the length of the Vec, extend the Vec
+    if pos > len {
+        vec.resize(pos, 0);
+    }
+
+    // Calculate the end position after writing
+    let end_pos = pos + buf.len();
+    if end_pos > len {
+        vec.resize(end_pos, 0);
+    }
+
+    // Copy the data to the specified range of the Vec
+    vec[pos..end_pos].copy_from_slice(buf);
+
+    // Update the current position
+    *pos_mut += buf.len() as u64;
+
+    Ok(buf.len())
+}
+
 impl Write for Cursor<&mut [u8]> {
     #[inline]
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         slice_write(&mut self.pos, self.inner, buf)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl<const N: usize> Write for Cursor<[u8; N]> {
+    #[inline]
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        slice_write(&mut self.pos, &mut self.inner, buf)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl Write for Cursor<alloc::vec::Vec<u8>> {
+    #[inline]
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        vec_write(&mut self.pos, &mut self.inner, buf)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl Write for Cursor<&mut alloc::vec::Vec<u8>> {
+    #[inline]
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        vec_write(&mut self.pos, self.inner, buf)
     }
 
     #[inline]
